@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HL Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c10;
+  --surface: #0d1318;
+  --surface2: #131c23;
+  --surface3: #1a2530;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #e8eef4;
+  --muted: #5a7080;
+  --dim: #3a5060;
+  --green: #00d48a;
+  --green-dim: rgba(0,212,138,0.12);
+  --green-glow: rgba(0,212,138,0.25);
+  --red: #ff4d6a;
+  --red-dim: rgba(255,77,106,0.12);
+  --amber: #f5a623;
+  --amber-dim: rgba(245,166,35,0.12);
+  --blue: #4d9fff;
+  --blue-dim: rgba(77,159,255,0.1);
+  --purple: #a78bfa;
+  --accent: #00d48a;
+  --mono: 'Space Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Scanlines texture ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── Layout ── */
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 52px 1fr;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  grid-column: 1/-1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-pulse {
+  width: 6px; height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); box-shadow:0 0 0 0 var(--green-glow); }
+  50% { opacity:.7; transform:scale(1.2); box-shadow:0 0 0 6px transparent; }
+}
+
+.header-status {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.header-status span { color: var(--accent); }
+
+.header-right { margin-left: auto; display:flex; align-items:center; gap:12px; }
+
+.scan-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 6px 14px;
+  background: var(--green-dim);
+  color: var(--accent);
+  border: 1px solid rgba(0,212,138,0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.scan-btn:hover { background: var(--green-glow); border-color: var(--accent); }
+.scan-btn.scanning { animation: scanpulse 1s ease-in-out infinite; }
+@keyframes scanpulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+.clock {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Sidebar ── */
+aside {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  padding: 0 14px;
+  margin-bottom: 20px;
+}
+
+.sidebar-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.add-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: 3px;
+  width: 18px; height: 18px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.pair-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s;
+  margin-bottom: 2px;
+}
+.pair-item:hover { background: var(--surface2); }
+.pair-item.active { background: var(--surface3); }
+
+.pair-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pair-price {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.pair-change {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.pair-change.up { color: var(--green); }
+.pair-change.dn { color: var(--red); }
+
+.pair-signal {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+.pair-signal.green { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+.pair-signal.amber { background: var(--amber); box-shadow: 0 0 6px rgba(245,166,35,0.4); }
+.pair-signal.red   { background: var(--red); }
+
+.remove-pair {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity .12s, color .12s;
+  padding: 0 2px;
+}
+.pair-item:hover .remove-pair { opacity: 1; }
+.remove-pair:hover { color: var(--red); }
+
+/* Filters */
+.filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+}
+
+.filter-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.toggle {
+  width: 28px; height: 16px;
+  background: var(--surface3);
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  border: 1px solid var(--border2);
+  transition: background .2s;
+  flex-shrink: 0;
+}
+.toggle.on { background: rgba(0,212,138,0.3); border-color: rgba(0,212,138,0.5); }
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: transform .2s, background .2s;
+}
+.toggle.on::after { transform: translateX(12px); background: var(--accent); }
+
+/* ── Main content ── */
+main {
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: var(--bg);
+}
+
+/* Stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.stat-val {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-sub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.stat-val.green { color: var(--green); }
+.stat-val.amber { color: var(--amber); }
+
+/* Signal feed */
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.feed-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.pill {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 4px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  cursor: pointer;
+  color: var(--muted);
+  background: none;
+  transition: all .12s;
+}
+.pill:hover, .pill.active { border-color: var(--accent); color: var(--accent); background: var(--green-dim); }
+.pill.active-red { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+/* Signal cards */
+.signal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  animation: slideIn .3s ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes slideIn {
+  from { opacity:0; transform:translateY(-8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.signal-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--dim);
+  border-radius: 10px 0 0 10px;
+  transition: background .15s;
+}
+
+.signal-card.long::before  { background: var(--green); }
+.signal-card.short::before { background: var(--red); }
+.signal-card.neutral::before { background: var(--amber); }
+
+.signal-card:hover {
+  border-color: var(--border2);
+  background: var(--surface2);
+}
+
+.signal-card.long:hover   { border-color: rgba(0,212,138,0.25); }
+.signal-card.short:hover  { border-color: rgba(255,77,106,0.25); }
+
+.signal-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.signal-pair {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.signal-dir {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.signal-dir.long  { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,212,138,0.25); }
+.signal-dir.short { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(255,77,106,0.25); }
+.signal-dir.watch { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,166,35,0.25); }
+
+.signal-strategy {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.signal-score {
+  margin-left: auto;
+  display: flex;
+  gap: 3px;
+}
+
+.score-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+}
+.score-dot.filled.green { background: var(--green); border-color: var(--green); }
+.score-dot.filled.amber { background: var(--amber); border-color: var(--amber); }
+.score-dot.filled.red   { background: var(--red);   border-color: var(--red); }
+
+.signal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sig-metric { }
+.sig-metric-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+.sig-metric-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.sig-metric-val.green { color: var(--green); }
+.sig-metric-val.red   { color: var(--red); }
+.sig-metric-val.amber { color: var(--amber); }
+
+.signal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sig-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  padding: 3px 7px;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.sig-tag.active { color: var(--text); border-color: var(--border2); }
+
+.signal-time {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--dim);
+  margin-left: auto;
+}
+
+.signal-footer {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Add pair modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 20px;
+  width: 320px;
+}
+
+.modal-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  letter-spacing: 0.06em;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+  margin-bottom: 10px;
+  transition: border-color .15s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--dim); }
+
+.asset-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+.asset-option {
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  transition: background .1s;
+  display: flex;
+  justify-content: space-between;
+}
+.asset-option:hover { background: var(--surface3); }
+.asset-option span { color: var(--muted); }
+
+.modal-close {
+  position: absolute;
+  top: 12px; right: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+/* Notification toast */
+.toast-container {
+  position: fixed;
+  top: 60px; right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 900;
+  max-width: 320px;
+}
+
+.toast {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  animation: toastIn .25s ease-out;
+  pointer-events: all;
+}
+
+@keyframes toastIn {
+  from { opacity:0; transform:translateX(20px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+
+.toast.long  { border-left: 3px solid var(--green); }
+.toast.short { border-left: 3px solid var(--red); }
+.toast.watch { border-left: 3px solid var(--amber); }
+
+.toast-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.toast-pair {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.toast-dir {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+.toast-dir.long  { color: var(--green); }
+.toast-dir.short { color: var(--red); }
+.toast-dir.watch { color: var(--amber); }
+
+.toast-body {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.toast-dismiss {
+  background: none; border: none;
+  color: var(--dim); cursor: pointer;
+  margin-left: auto;
+  font-size: 14px;
+  transition: color .1s;
+}
+.toast-dismiss:hover { color: var(--text); }
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--dim);
+}
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: .4;
+}
+.empty-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.empty-sub { font-size: 11px; color: var(--dim); }
+
+/* Funding bar */
+.funding-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.fr-item {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+}
+.fr-sym { color: var(--muted); }
+.fr-val.pos { color: var(--amber); }
+.fr-val.neg { color: var(--blue); }
+.fr-val.hot { color: var(--red); font-weight:700; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius:2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: 52px auto 1fr; }
+  aside { grid-row: 2; border-right: none; border-bottom: 1px solid var(--border); max-height: 200px; }
+  .stats-row { grid-template-columns: repeat(2,1fr); }
+}
+
+/* ── Notification panel ── */
+.notif-btn {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.notif-btn:hover { border-color: var(--accent); color: var(--accent); }
+.notif-btn.active { background: var(--green-dim); border-color: rgba(0,212,138,0.4); color: var(--accent); }
+.notif-btn .dot { width:5px; height:5px; border-radius:50%; background:var(--dim); }
+.notif-btn.active .dot { background:var(--accent); box-shadow:0 0 5px var(--green-glow); }
+
+.notif-modal {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 22px;
+  width: 380px;
+  position: relative;
+}
+
+.notif-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.notif-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.notif-section-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.platform-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.notif-input-row {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+
+.notif-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  outline: none;
+  transition: border-color .15s;
+}
+.notif-input:focus { border-color: var(--accent); }
+.notif-input::placeholder { color: var(--dim); }
+
+.notif-save-btn {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 7px 12px;
+  background: var(--green-dim);
+  color: var(--accent);
+  border: 1px solid rgba(0,212,138,0.3);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.notif-save-btn:hover { background: var(--green-glow); }
+
+.notif-test-btn {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 5px 10px;
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all .15s;
+  width: 100%;
+}
+.notif-test-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+.notif-status {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  display: none;
+  text-align: center;
+}
+.notif-status.ok   { display:block; background:var(--green-dim); color:var(--green); }
+.notif-status.err  { display:block; background:var(--red-dim);   color:var(--red); }
+.notif-status.info { display:block; background:var(--blue-dim);  color:var(--blue); }
+
+.notif-desc {
+  font-size: 10px;
+  color: var(--dim);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.threshold-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 11px;
+}
+.threshold-label { color: var(--muted); }
+.threshold-val {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--amber);
+  min-width: 24px;
+  text-align: right;
+}
+
+.steps-list {
+  list-style: none;
+  counter-reset: steps;
+}
+.steps-list li {
+  counter-increment: steps;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.steps-list li::before {
+  content: counter(steps);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--green-dim);
+  border-radius: 50%;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.steps-list a { color: var(--blue); text-decoration: none; }
+.steps-list a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-pulse"></div>
+    HL_SCANNER
+  </div>
+  <div class="header-status">SCANNING <span id="pair-count">0</span> PAIRS · LAST UPDATE <span id="last-update">--:--:--</span></div>
+  <div class="header-right">
+    <div class="clock" id="clock">00:00:00 UTC</div>
+    <button class="notif-btn" id="notif-btn" onclick="openNotifModal()">
+      <div class="dot"></div>
+      NOTIFY
+    </button>
+    <button class="scan-btn" id="scan-toggle" onclick="toggleScan()">⏸ PAUSE</button>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<aside>
+  <!-- Watchlist -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">
+      Watchlist
+      <button class="add-btn" onclick="openModal()" title="Add pair">+</button>
+    </div>
+    <div id="watchlist"></div>
+  </div>
+
+  <!-- Strategy filters -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Strategies</div>
+    <div class="filter-row" id="strategy-filters"></div>
+  </div>
+
+  <!-- Signal filters -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">Filters</div>
+    <div class="filter-row" id="signal-filters"></div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main>
+  <!-- Funding bar -->
+  <div class="funding-bar" id="funding-bar">
+    <span class="fr-sym" style="color:var(--dim);letter-spacing:.06em">FUNDING</span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" style="margin-top:14px">
+    <div class="stat-card">
+      <div class="stat-label">Signals Today</div>
+      <div class="stat-val" id="stat-signals">0</div>
+      <div class="stat-sub" id="stat-signals-sub">0 long · 0 short</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Strongest Signal</div>
+      <div class="stat-val green" id="stat-top">—</div>
+      <div class="stat-sub" id="stat-top-sub">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Funding</div>
+      <div class="stat-val amber" id="stat-funding">0.00%</div>
+      <div class="stat-sub">per 8h across watchlist</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Scan Interval</div>
+      <div class="stat-val" id="stat-interval">60s</div>
+      <div class="stat-sub" id="stat-next">next scan in —</div>
+    </div>
+  </div>
+
+  <!-- Feed header -->
+  <div class="feed-header">
+    <div class="feed-title">Signal Feed</div>
+    <div class="filter-pills">
+      <button class="pill active" data-dir="all" onclick="setDirFilter('all',this)">ALL</button>
+      <button class="pill" data-dir="long" onclick="setDirFilter('long',this)">LONG</button>
+      <button class="pill" data-dir="short" onclick="setDirFilter('short',this)">SHORT</button>
+      <button class="pill" data-dir="watch" onclick="setDirFilter('watch',this)">WATCH</button>
+    </div>
+  </div>
+
+  <!-- Signal feed -->
+  <div class="signal-grid" id="signal-feed">
+    <div class="empty-state">
+      <div class="empty-icon">⟳</div>
+      <div class="empty-title">Scanning market data...</div>
+      <div class="empty-sub">First results in ~10 seconds</div>
+    </div>
+  </div>
+</main>
+
+</div>
+
+<!-- Add pair modal -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title" id="modal-title">ADD TO WATCHLIST</div>
+    <input class="search-input" type="text" placeholder="Search pair... (BTC, ETH, SOL)" id="pair-search" oninput="filterAssets(this.value)">
+    <div class="asset-list" id="asset-list"></div>
+  </div>
+</div>
+
+<!-- Notification settings modal -->
+<div class="modal-overlay" id="notif-modal" onclick="if(event.target===this)closeNotifModal()">
+  <div class="notif-modal">
+    <button class="modal-close" onclick="closeNotifModal()">×</button>
+    <div class="modal-title" style="margin-bottom:16px">NOTIFICATIONS</div>
+
+    <!-- Telegram -->
+    <div class="notif-section">
+      <div class="notif-section-header">
+        <div class="notif-section-title">
+          Telegram
+          <span class="platform-badge" style="background:rgba(77,159,255,0.15);color:var(--blue)">RECOMMENDED</span>
+        </div>
+        <div class="toggle" id="tg-toggle" onclick="toggleChannel('telegram',this)"></div>
+      </div>
+      <div class="notif-desc">Signals sent directly to your Telegram. Works even when browser is closed if you keep the tab open in background. Setup takes 2 min.</div>
+      <ul class="steps-list" style="margin-bottom:10px">
+        <li>Message <a href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram → type <code style="background:var(--surface3);padding:1px 5px;border-radius:3px">/newbot</code> → copy your token</li>
+        <li>Message <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> → copy your Chat ID</li>
+        <li><b style="color:var(--amber)">Search for your new bot by username and send it any message</b> (e.g. "hi") — it cannot message you first</li>
+        <li>Paste token + Chat ID below and click Save</li>
+      </ul>
+      <div class="notif-input-row">
+        <input class="notif-input" id="tg-token" placeholder="Bot token  (123456:ABCdef...)" type="password">
+      </div>
+      <div class="notif-input-row">
+        <input class="notif-input" id="tg-chatid" placeholder="Chat ID  (123456789)">
+        <button class="notif-save-btn" onclick="saveTelegram()">SAVE</button>
+      </div>
+      <button class="notif-test-btn" onclick="testTelegram()">Send test message</button>
+      <div class="notif-status" id="tg-status"></div>
+    </div>
+
+    <!-- ntfy.sh -->
+    <div class="notif-section">
+      <div class="notif-section-header">
+        <div class="notif-section-title">
+          ntfy.sh push
+          <span class="platform-badge" style="background:rgba(167,139,250,0.15);color:var(--purple)">FASTEST SETUP</span>
+        </div>
+        <div class="toggle" id="ntfy-toggle" onclick="toggleChannel('ntfy',this)"></div>
+      </div>
+      <div class="notif-desc">Native push notifications on iOS and Android. No account needed — just pick a unique topic name, install the app, subscribe.</div>
+      <ul class="steps-list" style="margin-bottom:10px">
+        <li>Install <a href="https://ntfy.sh" target="_blank">ntfy app</a> on your phone (iOS or Android — free)</li>
+        <li>Choose a unique topic name below (e.g. <code style="background:var(--surface3);padding:1px 5px;border-radius:3px">hl-signals-yourname</code>)</li>
+        <li>In the ntfy app tap + and subscribe to your topic</li>
+      </ul>
+      <div class="notif-input-row">
+        <input class="notif-input" id="ntfy-topic" placeholder="Topic name  (e.g. hl-signals-j4k9x)">
+        <button class="notif-save-btn" onclick="saveNtfy()">SAVE</button>
+      </div>
+      <button class="notif-test-btn" onclick="testNtfy()">Send test notification</button>
+      <div class="notif-status" id="ntfy-status"></div>
+    </div>
+
+    <!-- Thresholds -->
+    <div class="notif-section" style="margin-bottom:0">
+      <div class="notif-section-title" style="margin-bottom:10px">Alert thresholds</div>
+      <div class="threshold-row">
+        <span class="threshold-label">Minimum signal score</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" min="3" max="5" value="4" id="score-thresh" style="width:80px"
+            oninput="document.getElementById('score-thresh-val').textContent=this.value+'/5';saveThresholds()">
+          <span class="threshold-val" id="score-thresh-val">4/5</span>
+        </div>
+      </div>
+      <div class="threshold-row">
+        <span class="threshold-label">Notify on LONG signals</span>
+        <div class="toggle on" id="thresh-long" onclick="this.classList.toggle('on');saveThresholds()"></div>
+      </div>
+      <div class="threshold-row">
+        <span class="threshold-label">Notify on SHORT signals</span>
+        <div class="toggle on" id="thresh-short" onclick="this.classList.toggle('on');saveThresholds()"></div>
+      </div>
+      <div class="threshold-row">
+        <span class="threshold-label">Notify on WATCH signals</span>
+        <div class="toggle" id="thresh-watch" onclick="this.classList.toggle('on');saveThresholds()"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+
+// Populated dynamically from HL API on load — shows every live perp
+let ALL_ASSETS = [];
+
+let watchlist = JSON.parse(localStorage.getItem('hl_watchlist') || '["BTC","ETH","SOL","ARB","DOGE"]');
+let signals = [];
+let marketData = {};
+let fundingData = {};
+let scanning = true;
+let scanInterval = null;
+let countdown = 60;
+let dirFilter = 'all';
+let signalCount = { long:0, short:0, watch:0 };
+
+const strategies = {
+  funding_arb:    { label:'Funding Arb',    on:true  },
+  momentum:       { label:'Momentum',       on:true  },
+  mean_reversion: { label:'Mean Reversion', on:true  },
+  liq_cascade:    { label:'Liq. Cascade',   on:true  },
+};
+
+const sigFilters = {
+  min_score_3: { label:'Score ≥ 3',  on:true  },
+  high_oi:     { label:'High OI',    on:false },
+  extreme_fr:  { label:'Extreme FR', on:false },
+};
+
+// ═══════════════════════════════════════════════════════
+// HYPERLIQUID API
+// ═══════════════════════════════════════════════════════
+
+async function fetchMeta() {
+  try {
+    const r = await fetch('https://api.hyperliquid.xyz/info', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'metaAndAssetCtxs' })
+    });
+    const [meta, ctxs] = await r.json();
+
+    // Populate ALL_ASSETS from live HL universe on every fetch
+    ALL_ASSETS = meta.universe.map(a => a.name).sort();
+
+    const result = {};
+    meta.universe.forEach((asset, i) => {
+      const ctx = ctxs[i];
+      result[asset.name] = {
+        funding:      parseFloat(ctx.funding || 0),
+        openInterest: parseFloat(ctx.openInterest || 0),
+        markPx:       parseFloat(ctx.markPx || 0),
+        prevDayPx:    parseFloat(ctx.prevDayPx || 0),
+      };
+    });
+    return result;
+  } catch(e) {
+    console.warn('Meta fetch failed:', e.message);
+    return {};
+  }
+}
+
+async function fetchCandles(asset, interval='1h', n=100) {
+  try {
+    const now = Date.now();
+    const start = now - n * 3600_000;
+    const r = await fetch('https://api.hyperliquid.xyz/info', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        type:'candleSnapshot',
+        req:{ coin:asset, interval, startTime:start, endTime:now }
+      })
+    });
+    return await r.json();
+  } catch(e) {
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INDICATORS (pure functions)
+// ═══════════════════════════════════════════════════════
+
+function ema(vals, p) {
+  if (vals.length < p) return null;
+  const k = 2/(p+1);
+  let e = vals[0];
+  for (let i=1; i<vals.length; i++) e = vals[i]*k + e*(1-k);
+  return e;
+}
+
+function rsi(vals, p=14) {
+  if (vals.length < p+1) return null;
+  let gains=0, losses=0;
+  for (let i=vals.length-p; i<vals.length; i++) {
+    const d = vals[i]-vals[i-1];
+    if (d>0) gains+=d; else losses+=Math.abs(d);
+  }
+  const ag=gains/p, al=losses/p;
+  if (al===0) return 100;
+  return 100 - 100/(1+ag/al);
+}
+
+function atr(candles, p=14) {
+  if (candles.length < p+1) return null;
+  let sum=0;
+  for (let i=candles.length-p; i<candles.length; i++) {
+    const h=parseFloat(candles[i].h), l=parseFloat(candles[i].l), pc=parseFloat(candles[i-1].c);
+    sum += Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc));
+  }
+  return sum/p;
+}
+
+function zscore(vals, p=20) {
+  if (vals.length < p) return null;
+  const w = vals.slice(-p);
+  const mean = w.reduce((a,b)=>a+b,0)/p;
+  const std  = Math.sqrt(w.reduce((s,v)=>s+(v-mean)**2,0)/p);
+  return std===0 ? null : (vals[vals.length-1]-mean)/std;
+}
+
+function adx(candles, p=14) {
+  if (candles.length < p*2) return null;
+  const tr=[], pdm=[], mdm=[];
+  for (let i=1;i<candles.length;i++) {
+    const h=parseFloat(candles[i].h), l=parseFloat(candles[i].l),
+          ph=parseFloat(candles[i-1].h), pl=parseFloat(candles[i-1].l),
+          pc=parseFloat(candles[i-1].c);
+    tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+    const up=h-ph, dn=pl-l;
+    pdm.push(up>dn&&up>0?up:0);
+    mdm.push(dn>up&&dn>0?dn:0);
+  }
+  const smooth=(arr)=>{let s=[arr.slice(0,p).reduce((a,b)=>a+b,0)];for(let i=p;i<arr.length;i++)s.push(s[s.length-1]-s[s.length-1]/p+arr[i]);return s;};
+  const str=smooth(tr), spdm=smooth(pdm), smdm=smooth(mdm);
+  const dx=str.map((t,i)=>{const pdi=100*spdm[i]/t,mdi=100*smdm[i]/t,d=pdi+mdi;return d?100*Math.abs(pdi-mdi)/d:0;});
+  return dx.slice(-p).reduce((a,b)=>a+b,0)/p;
+}
+
+function volRatio(candles, p=20) {
+  if (candles.length < p+1) return null;
+  const vols = candles.slice(-(p+1)).map(c=>parseFloat(c.v));
+  const avg = vols.slice(0,p).reduce((a,b)=>a+b,0)/p;
+  return avg===0 ? null : vols[p]/avg;
+}
+
+function emaSlope(vals, p=21) {
+  if (vals.length < p+3) return null;
+  const e1 = ema(vals.slice(0,-3), p);
+  const e2 = ema(vals, p);
+  if (!e1 || !e2 || e1===0) return null;
+  return (e2-e1)/e1*100;
+}
+
+// ═══════════════════════════════════════════════════════
+// SIGNAL DETECTION
+// ═══════════════════════════════════════════════════════
+
+function detectSignals(asset, candles, meta) {
+  if (!candles || candles.length < 60) return [];
+  const found = [];
+  const closes = candles.map(c=>parseFloat(c.c));
+  const mid = meta.markPx || closes[closes.length-1];
+  const funding = meta.funding || 0;
+  const adxVal = adx(candles);
+  const slope = emaSlope(closes);
+  const vr = volRatio(candles);
+  const rsiVal = rsi(closes);
+  const atrVal = atr(candles);
+  const z = zscore(closes);
+  const fast = ema(closes, 9);
+  const slow = ema(closes, 21);
+
+  // ── Regime ──
+  let regime = 'NO_TRADE';
+  if (adxVal !== null) {
+    if (vr > 1.6 && adxVal > 20) regime = 'BREAKOUT';
+    else if (adxVal >= 25 && slope > 0.02)  regime = 'TREND_UP';
+    else if (adxVal >= 25 && slope < -0.02) regime = 'TREND_DOWN';
+    else if (adxVal < 18) regime = 'RANGE';
+    else regime = 'WEAK';
+  }
+
+  // ── Funding arb ──
+  if (strategies.funding_arb.on) {
+    const absF = Math.abs(funding);
+    if (absF >= 0.0005) {
+      const dir = funding > 0 ? 'short' : 'long';
+      let score = absF >= 0.001 ? 5 : absF >= 0.0007 ? 4 : 3;
+      const stop = dir==='long' ? mid*(1-0.02) : mid*(1+0.02);
+      found.push({
+        asset, dir, score, strategy:'funding_arb',
+        tags: ['FUNDING_EXTREME', `FR:${(funding*100).toFixed(4)}%`, regime],
+        entry: mid, stop: stop, target: null,
+        rr: null, atrVal, regime,
+        funding, adxVal, rsiVal, z,
+        reason: `Funding at ${(funding*100).toFixed(4)}%/8h — ${dir==='short'?'longs paying shorts':'shorts paying longs'}. Carry trade opportunity.`
+      });
+    }
+  }
+
+  // ── Momentum ──
+  if (strategies.momentum.on && (regime==='TREND_UP'||regime==='TREND_DOWN'||regime==='BREAKOUT')) {
+    const dir = regime==='TREND_DOWN' ? 'short' : 'long';
+    let score = 0; const tags = [];
+    if (fast && slow && ((dir==='long'&&fast>slow)||(dir==='short'&&fast<slow))) { score++; tags.push('EMA_CROSS'); }
+    if (rsiVal && ((dir==='long'&&rsiVal<70)||(dir==='short'&&rsiVal>30))) { score++; tags.push('RSI_OK'); }
+    if (vr && vr >= 1.5) { score++; tags.push(`VOL:${vr.toFixed(1)}x`); }
+    if (score >= 2 && adxVal && adxVal >= 20) { score++; tags.push(`ADX:${adxVal.toFixed(0)}`); }
+    if (regime==='BREAKOUT') { score++; tags.push('BREAKOUT'); }
+    if (score >= 3) {
+      const stopDist = atrVal ? atrVal*1.5 : mid*0.02;
+      const stop   = dir==='long' ? mid-stopDist : mid+stopDist;
+      const target = dir==='long' ? mid+stopDist*2.5 : mid-stopDist*2.5;
+      const rr = 2.5;
+      found.push({
+        asset, dir, score: Math.min(score,5), strategy:'momentum',
+        tags: [...tags, regime],
+        entry:mid, stop, target, rr,
+        atrVal, regime, funding, adxVal, rsiVal, z,
+        reason: `${regime} regime confirmed. ${dir==='long'?'Upward':'Downward'} momentum with ${score}/5 signals aligned.`
+      });
+    }
+  }
+
+  // ── Mean reversion ──
+  if (strategies.mean_reversion.on && regime==='RANGE' && z !== null) {
+    const absZ = Math.abs(z);
+    if (absZ >= 2.0 && absZ < 3.5) {
+      const dir = z>0 ? 'short' : 'long';
+      let score = absZ>=3.0?5:absZ>=2.5?4:3;
+      const tags = [`Z:${z.toFixed(2)}`,'RANGE'];
+      if (Math.abs(funding)>0.0003) { score=Math.min(5,score+1); tags.push('FR_ALIGNS'); }
+      const stopDist = atrVal ? atrVal*1.2 : mid*0.015;
+      const stop = dir==='long'?mid-stopDist:mid+stopDist;
+      const sma20 = closes.slice(-20).reduce((a,b)=>a+b)/20;
+      found.push({
+        asset, dir, score, strategy:'mean_reversion',
+        tags, entry:mid, stop, target:sma20,
+        rr:Math.abs(sma20-mid)/stopDist,
+        atrVal, regime, funding, adxVal, rsiVal, z,
+        reason: `Z-score at ${z.toFixed(2)} — price extended ${Math.abs(z).toFixed(1)} std deviations from 20-bar mean. Reversion expected.`
+      });
+    }
+  }
+
+  // ── Liq cascade watch ──
+  if (strategies.liq_cascade.on && rsiVal !== null) {
+    const extreme = (rsiVal > 75 || rsiVal < 25) && vr && vr > 1.3;
+    if (extreme) {
+      const dir = rsiVal > 75 ? 'watch' : 'watch';
+      const label = rsiVal > 75 ? 'SHORT_SETUP' : 'LONG_SETUP';
+      found.push({
+        asset, dir:'watch', score:3, strategy:'liq_cascade',
+        tags:[label,`RSI:${rsiVal.toFixed(0)}`,`VOL:${vr.toFixed(1)}x`],
+        entry:mid, stop:null, target:null, rr:null,
+        atrVal, regime, funding, adxVal, rsiVal, z,
+        reason: `RSI at ${rsiVal.toFixed(0)} with ${vr.toFixed(1)}× volume. Liquidation cascade risk — watch for cascade trigger.`
+      });
+    }
+  }
+
+  return found;
+}
+
+// ═══════════════════════════════════════════════════════
+// UI RENDERING
+// ═══════════════════════════════════════════════════════
+
+function renderWatchlist() {
+  const el = document.getElementById('watchlist');
+  el.innerHTML = watchlist.map(asset => {
+    const d = marketData[asset] || {};
+    const price = d.markPx || 0;
+    const prev  = d.prevDayPx || price;
+    const chg   = prev ? ((price-prev)/prev*100) : 0;
+    const hasSig = signals.some(s=>s.asset===asset&&s.dir!=='watch');
+    const hasWatch = signals.some(s=>s.asset===asset&&s.dir==='watch');
+    const dotClass = hasSig ? 'green' : hasWatch ? 'amber' : '';
+    return `<div class="pair-item" onclick="focusPair('${asset}')">
+      <div>
+        <div class="pair-name">${asset}</div>
+        <div class="pair-price">$${fmtPrice(price)}</div>
+      </div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <div class="pair-change ${chg>=0?'up':'dn'}">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="pair-signal ${dotClass}"></div>
+          <button class="remove-pair" onclick="event.stopPropagation();removePair('${asset}')" title="Remove">×</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('pair-count').textContent = watchlist.length;
+}
+
+function renderStrategyFilters() {
+  document.getElementById('strategy-filters').innerHTML =
+    Object.entries(strategies).map(([k,v])=>`
+      <div class="filter-item">
+        <span class="filter-label">${v.label}</span>
+        <div class="toggle ${v.on?'on':''}" onclick="toggleStrategy('${k}',this)"></div>
+      </div>`
+    ).join('');
+}
+
+function renderSignalFilters() {
+  document.getElementById('signal-filters').innerHTML =
+    Object.entries(sigFilters).map(([k,v])=>`
+      <div class="filter-item">
+        <span class="filter-label">${v.label}</span>
+        <div class="toggle ${v.on?'on':''}" onclick="toggleFilter('${k}',this)"></div>
+      </div>`
+    ).join('');
+}
+
+function renderFundingBar() {
+  const items = Object.entries(fundingData)
+    .filter(([a])=>watchlist.includes(a))
+    .map(([a,f])=>{
+      const pct = (f*100).toFixed(4);
+      const cls = Math.abs(f)>0.001?'hot':f>0?'pos':'neg';
+      return `<div class="fr-item"><span class="fr-sym">${a}</span><span class="fr-val ${cls}">${f>=0?'+':''}${pct}%</span></div>`;
+    }).join('');
+  document.getElementById('funding-bar').innerHTML =
+    `<span class="fr-sym" style="color:var(--dim);letter-spacing:.06em;margin-right:4px">FUNDING·8H</span>${items||'<span style="color:var(--dim)">Loading...</span>'}`;
+}
+
+function renderSignals() {
+  const feed = document.getElementById('signal-feed');
+  let filtered = [...signals];
+
+  if (dirFilter !== 'all') filtered = filtered.filter(s=>s.dir===dirFilter);
+  if (sigFilters.min_score_3.on) filtered = filtered.filter(s=>s.score>=3);
+  if (sigFilters.high_oi.on) {
+    filtered = filtered.filter(s=>{
+      const d = marketData[s.asset];
+      return d && d.openInterest > 50_000_000;
+    });
+  }
+  if (sigFilters.extreme_fr.on) filtered = filtered.filter(s=>Math.abs(s.funding)>=0.0007);
+
+  filtered.sort((a,b)=>b.score-a.score||b.ts-a.ts);
+
+  if (!filtered.length) {
+    feed.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">◎</div>
+      <div class="empty-title">No signals match current filters</div>
+      <div class="empty-sub">Adjust filters or wait for the next scan</div>
+    </div>`;
+    return;
+  }
+
+  feed.innerHTML = filtered.slice(0,50).map(s=>renderSignalCard(s)).join('');
+  updateStats();
+}
+
+function renderSignalCard(s) {
+  const dots = [1,2,3,4,5].map(i=>{
+    const cls = i<=s.score ? (s.score>=4?'green':s.score===3?'amber':'red') : '';
+    return `<div class="score-dot ${i<=s.score?'filled':''} ${cls}"></div>`;
+  }).join('');
+
+  const rr = s.rr ? `${s.rr.toFixed(1)}:1` : '—';
+  const stop = s.stop ? `$${fmtPrice(s.stop)}` : '—';
+  const target = s.target ? `$${fmtPrice(s.target)}` : '—';
+
+  const tags = s.tags.map(t=>`<div class="sig-tag active">${t}</div>`).join('');
+
+  const dirLabel = s.dir==='long'?'LONG':s.dir==='short'?'SHORT':'WATCH';
+  const timeAgo = s.ts ? timeSince(s.ts) : '';
+
+  return `<div class="signal-card ${s.dir}" onclick="showDetail('${s.asset}','${s.strategy}')">
+    <div class="signal-top">
+      <div class="signal-pair">${s.asset}-PERP</div>
+      <div class="signal-dir ${s.dir}">${dirLabel}</div>
+      <div class="signal-strategy">${stratLabel(s.strategy)}</div>
+      <div class="signal-score">${dots}</div>
+    </div>
+    <div class="signal-body">
+      <div class="sig-metric">
+        <div class="sig-metric-label">Entry</div>
+        <div class="sig-metric-val">$${fmtPrice(s.entry)}</div>
+      </div>
+      <div class="sig-metric">
+        <div class="sig-metric-label">Stop</div>
+        <div class="sig-metric-val red">${stop}</div>
+      </div>
+      <div class="sig-metric">
+        <div class="sig-metric-label">Target</div>
+        <div class="sig-metric-val green">${target}</div>
+      </div>
+      <div class="sig-metric">
+        <div class="sig-metric-label">R:R</div>
+        <div class="sig-metric-val ${s.rr&&s.rr>=2?'green':''}">${rr}</div>
+      </div>
+      <div class="sig-metric">
+        <div class="sig-metric-label">Regime</div>
+        <div class="sig-metric-val">${s.regime||'—'}</div>
+      </div>
+      <div class="sig-metric">
+        <div class="sig-metric-label">Funding</div>
+        <div class="sig-metric-val ${Math.abs(s.funding||0)>0.001?'amber':''}">${s.funding?(s.funding*100).toFixed(4)+'%':'—'}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">
+      ${tags}
+      <div class="signal-time" style="margin-left:auto">${timeAgo}</div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5">${s.reason}</div>
+  </div>`;
+}
+
+function updateStats() {
+  const longs  = signals.filter(s=>s.dir==='long').length;
+  const shorts = signals.filter(s=>s.dir==='short').length;
+  const watches= signals.filter(s=>s.dir==='watch').length;
+  document.getElementById('stat-signals').textContent = signals.length;
+  document.getElementById('stat-signals-sub').textContent = `${longs} long · ${shorts} short · ${watches} watch`;
+
+  const top = [...signals].sort((a,b)=>b.score-a.score)[0];
+  if (top) {
+    document.getElementById('stat-top').textContent = top.asset;
+    document.getElementById('stat-top-sub').textContent = `${stratLabel(top.strategy)} — score ${top.score}/5`;
+  }
+
+  const frVals = watchlist.map(a=>fundingData[a]||0);
+  const avgFr = frVals.length ? frVals.reduce((a,b)=>a+b)/frVals.length : 0;
+  document.getElementById('stat-funding').textContent = `${avgFr>=0?'+':''}${(avgFr*100).toFixed(4)}%`;
+}
+
+function renderCountdown() {
+  document.getElementById('stat-next').textContent = `next scan in ${countdown}s`;
+}
+
+// ═══════════════════════════════════════════════════════
+// SCAN LOGIC
+// ═══════════════════════════════════════════════════════
+
+async function runScan() {
+  if (!scanning) return;
+  document.getElementById('scan-toggle').classList.add('scanning');
+
+  try {
+    // Fetch all market metadata
+    const meta = await fetchMeta();
+    Object.assign(marketData, meta);
+    Object.keys(meta).forEach(a=>{ if(watchlist.includes(a)) fundingData[a]=meta[a].funding; });
+
+    // Scan each pair in watchlist
+    const newSignals = [];
+    for (const asset of watchlist) {
+      const candles = await fetchCandles(asset);
+      const m = meta[asset] || {};
+      const found = detectSignals(asset, candles, m);
+      found.forEach(s=>{ s.ts = Date.now(); newSignals.push(s); });
+    }
+
+    // Notify on new high-quality signals
+    const prev = signals.map(s=>`${s.asset}_${s.strategy}_${s.dir}`);
+    newSignals.forEach(s=>{
+      const key = `${s.asset}_${s.strategy}_${s.dir}`;
+      if (!prev.includes(key) && s.score >= 4) {
+        showToast(s);
+        fireAlert(s);   // → Telegram + ntfy.sh
+      }
+    });
+
+    signals = newSignals;
+    renderWatchlist();
+    renderFundingBar();
+    renderSignals();
+
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('en-GB',{hour12:false,timeZone:'UTC'});
+
+  } catch(e) {
+    console.error('Scan error:', e);
+  }
+
+  document.getElementById('scan-toggle').classList.remove('scanning');
+  countdown = 60;
+}
+
+function startScanLoop() {
+  runScan();
+  scanInterval = setInterval(()=>{
+    countdown--;
+    renderCountdown();
+    if (countdown<=0) { countdown=60; runScan(); }
+  }, 1000);
+}
+
+function toggleScan() {
+  scanning = !scanning;
+  const btn = document.getElementById('scan-toggle');
+  if (scanning) {
+    btn.textContent = '⏸ PAUSE';
+    startScanLoop();
+  } else {
+    btn.textContent = '▶ RESUME';
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// TOASTS
+// ═══════════════════════════════════════════════════════
+
+function showToast(s) {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${s.dir}`;
+  el.innerHTML = `
+    <div class="toast-header">
+      <div class="toast-pair">${s.asset}-PERP</div>
+      <div class="toast-dir ${s.dir}">${s.dir.toUpperCase()}</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:4px">${stratLabel(s.strategy)}</div>
+      <button class="toast-dismiss" onclick="this.closest('.toast').remove()">×</button>
+    </div>
+    <div class="toast-body">
+      Score ${s.score}/5 · $${fmtPrice(s.entry)} · ${s.tags.slice(0,2).join(' · ')}
+    </div>`;
+  container.prepend(el);
+  setTimeout(()=>{ if(el.parentNode) el.remove(); }, 8000);
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL + WATCHLIST MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+function openModal() {
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('pair-search').value = '';
+  // Update modal title with live count once we have it
+  const count = ALL_ASSETS.length;
+  document.getElementById('modal-title').textContent =
+    count ? `ADD TO WATCHLIST — ${count} PAIRS AVAILABLE` : 'ADD TO WATCHLIST';
+  filterAssets('');
+  setTimeout(()=>document.getElementById('pair-search').focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function filterAssets(q) {
+  if (!ALL_ASSETS.length) {
+    document.getElementById('asset-list').innerHTML =
+      `<div style="padding:12px;text-align:center;color:var(--dim);font-size:11px">Loading pairs from Hyperliquid...</div>`;
+    return;
+  }
+  const available = ALL_ASSETS.filter(a =>
+    !watchlist.includes(a) && a.toLowerCase().includes(q.toLowerCase())
+  );
+  const count = available.length;
+  document.getElementById('asset-list').innerHTML =
+    available.slice(0, 30).map(a => {
+      const d = marketData[a];
+      const price = d ? `$${fmtPrice(d.markPx)}` : '';
+      return `<div class="asset-option" onclick="addPair('${a}')"><span>${a}-PERP</span><span>${price}</span></div>`;
+    }).join('') +
+    (count > 30 ? `<div style="padding:8px 10px;color:var(--dim);font-size:10px;font-family:var(--mono)">${count-30} more — type to filter</div>` : '') +
+    (!available.length ? `<div style="padding:12px;text-align:center;color:var(--dim);font-size:11px">No matching pairs on Hyperliquid</div>` : '');
+}
+
+function addPair(asset) {
+  if (!watchlist.includes(asset)) {
+    watchlist.push(asset);
+    saveWatchlist();
+    renderWatchlist();
+    closeModal();
+    runScan();
+  }
+}
+
+function removePair(asset) {
+  watchlist = watchlist.filter(a=>a!==asset);
+  signals   = signals.filter(s=>s.asset!==asset);
+  saveWatchlist();
+  renderWatchlist();
+  renderSignals();
+}
+
+function saveWatchlist() {
+  localStorage.setItem('hl_watchlist', JSON.stringify(watchlist));
+}
+
+function focusPair(asset) {
+  dirFilter = 'all';
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  document.querySelector('[data-dir="all"]').classList.add('active');
+  renderSignals();
+  const card = document.querySelector(`.signal-card`);
+  if (card) card.scrollIntoView({behavior:'smooth'});
+}
+
+// ═══════════════════════════════════════════════════════
+// TOGGLES + FILTERS
+// ═══════════════════════════════════════════════════════
+
+function toggleStrategy(key, el) {
+  strategies[key].on = !strategies[key].on;
+  el.classList.toggle('on', strategies[key].on);
+  runScan();
+}
+
+function toggleFilter(key, el) {
+  sigFilters[key].on = !sigFilters[key].on;
+  el.classList.toggle('on', sigFilters[key].on);
+  renderSignals();
+}
+
+function setDirFilter(dir, btn) {
+  dirFilter = dir;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  renderSignals();
+}
+
+// ═══════════════════════════════════════════════════════
+// DETAIL VIEW (stub — expand as needed)
+// ═══════════════════════════════════════════════════════
+
+function showDetail(asset, strategy) {
+  // Clicking a card could open a detail panel — left as enhancement
+}
+
+// ═══════════════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════════════
+
+function tickClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-GB',{hour12:false,timeZone:'UTC'})+' UTC';
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ═══════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════
+
+function fmtPrice(p) {
+  if (!p || isNaN(p)) return '—';
+  if (p >= 1000)  return p.toLocaleString('en-US',{maximumFractionDigits:0});
+  if (p >= 1)     return p.toFixed(2);
+  if (p >= 0.01)  return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function stratLabel(s) {
+  return {funding_arb:'Funding Arb',momentum:'Momentum',mean_reversion:'Mean Rev.',liq_cascade:'Liq. Cascade'}[s]||s;
+}
+
+function timeSince(ts) {
+  const sec = Math.floor((Date.now()-ts)/1000);
+  if (sec<60)  return `${sec}s ago`;
+  if (sec<3600) return `${Math.floor(sec/60)}m ago`;
+  return `${Math.floor(sec/3600)}h ago`;
+}
+
+// ═══════════════════════════════════════════════════════
+// NOTIFICATION SYSTEM
+// ═══════════════════════════════════════════════════════
+
+// Load saved config
+const notifConfig = JSON.parse(localStorage.getItem('hl_notif') || '{}');
+
+const channels = {
+  telegram: { on: !!notifConfig.tgToken, token: notifConfig.tgToken||'', chatId: notifConfig.tgChatId||'' },
+  ntfy:     { on: !!notifConfig.ntfyTopic, topic: notifConfig.ntfyTopic||'' },
+};
+
+const thresholds = {
+  minScore: notifConfig.minScore || 4,
+  long:     notifConfig.long  !== false,
+  short:    notifConfig.short !== false,
+  watch:    notifConfig.watch === true,
+};
+
+function openNotifModal() {
+  document.getElementById('notif-modal').classList.add('open');
+  // Populate saved values
+  document.getElementById('tg-token').value   = channels.telegram.token;
+  document.getElementById('tg-chatid').value  = channels.telegram.chatId;
+  document.getElementById('ntfy-topic').value = channels.ntfy.topic;
+  document.getElementById('tg-toggle').classList.toggle('on', channels.telegram.on);
+  document.getElementById('ntfy-toggle').classList.toggle('on', channels.ntfy.on);
+  document.getElementById('score-thresh').value = thresholds.minScore;
+  document.getElementById('score-thresh-val').textContent = thresholds.minScore+'/5';
+  document.getElementById('thresh-long').classList.toggle('on',  thresholds.long);
+  document.getElementById('thresh-short').classList.toggle('on', thresholds.short);
+  document.getElementById('thresh-watch').classList.toggle('on', thresholds.watch);
+}
+
+function closeNotifModal() {
+  document.getElementById('notif-modal').classList.remove('open');
+}
+
+function toggleChannel(ch, el) {
+  channels[ch].on = !channels[ch].on;
+  el.classList.toggle('on', channels[ch].on);
+  updateNotifBtn();
+  saveAll();
+}
+
+function updateNotifBtn() {
+  const anyOn = channels.telegram.on || channels.ntfy.on;
+  document.getElementById('notif-btn').classList.toggle('active', anyOn);
+}
+
+function saveTelegram() {
+  const token  = document.getElementById('tg-token').value.trim();
+  const chatId = document.getElementById('tg-chatid').value.trim();
+  if (!token || !chatId) { setStatus('tg-status', 'err', 'Enter both token and chat ID'); return; }
+  channels.telegram.token  = token;
+  channels.telegram.chatId = chatId;
+  channels.telegram.on     = true;
+  document.getElementById('tg-toggle').classList.add('on');
+  saveAll();
+  updateNotifBtn();
+  setStatus('tg-status', 'ok', 'Saved — send a test to confirm');
+}
+
+function saveNtfy() {
+  const topic = document.getElementById('ntfy-topic').value.trim().replace(/\s+/g,'');
+  if (!topic) { setStatus('ntfy-status', 'err', 'Enter a topic name'); return; }
+  channels.ntfy.topic = topic;
+  channels.ntfy.on    = true;
+  document.getElementById('ntfy-toggle').classList.add('on');
+  saveAll();
+  updateNotifBtn();
+  setStatus('ntfy-status', 'ok', 'Saved — send a test to confirm');
+}
+
+function saveThresholds() {
+  thresholds.minScore = parseInt(document.getElementById('score-thresh').value);
+  thresholds.long     = document.getElementById('thresh-long').classList.contains('on');
+  thresholds.short    = document.getElementById('thresh-short').classList.contains('on');
+  thresholds.watch    = document.getElementById('thresh-watch').classList.contains('on');
+  saveAll();
+}
+
+function saveAll() {
+  localStorage.setItem('hl_notif', JSON.stringify({
+    tgToken:   channels.telegram.token,
+    tgChatId:  channels.telegram.chatId,
+    ntfyTopic: channels.ntfy.topic,
+    minScore:  thresholds.minScore,
+    long:      thresholds.long,
+    short:     thresholds.short,
+    watch:     thresholds.watch,
+  }));
+}
+
+// ── Send to Telegram ──────────────────────────────────────────────────────────
+
+async function sendTelegram(text) {
+  if (!channels.telegram.on || !channels.telegram.token || !channels.telegram.chatId) return false;
+  try {
+    // api.telegram.org blocks direct fetch from file:// origins (CORS).
+    // We proxy through corsproxy.io which adds the required headers.
+    const apiUrl = `https://api.telegram.org/bot${channels.telegram.token}/sendMessage`;
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+    const r = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        chat_id: channels.telegram.chatId,
+        text,
+        parse_mode: 'HTML',
+      })
+    });
+    const j = await r.json();
+    return j.ok === true;
+  } catch(e) {
+    console.warn('Telegram send failed:', e);
+    return false;
+  }
+}
+
+async function testTelegram() {
+  const token  = document.getElementById('tg-token').value.trim()  || channels.telegram.token;
+  const chatId = document.getElementById('tg-chatid').value.trim() || channels.telegram.chatId;
+  if (!token || !chatId) {
+    setStatus('tg-status', 'err', 'Enter both token and chat ID first, then Save');
+    return;
+  }
+  setStatus('tg-status', 'info', 'Sending via proxy...');
+
+  try {
+    const apiUrl   = `https://api.telegram.org/bot${token}/sendMessage`;
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+    const r = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: `<b>HL Scanner — test message ✅</b>\n\nNotifications are working.\n\nYou'll receive signals like:\n📈 <b>BTC-PERP LONG</b> · Momentum · Score 4/5\nEntry $68,150 · Stop $66,800 · R:R 2.5:1`,
+        parse_mode: 'HTML',
+      })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      setStatus('tg-status', 'ok', 'Message sent! Check your Telegram now.');
+    } else {
+      // Telegram returned an error — show it directly
+      const desc = j.description || JSON.stringify(j);
+      if (desc.includes('chat not found')) {
+        setStatus('tg-status', 'err', 'Chat not found — make sure you have messaged your bot at least once first');
+      } else if (desc.includes('Unauthorized')) {
+        setStatus('tg-status', 'err', 'Invalid token — double-check the token from @BotFather');
+      } else {
+        setStatus('tg-status', 'err', `Telegram error: ${desc}`);
+      }
+    }
+  } catch(e) {
+    setStatus('tg-status', 'err', `Network error: ${e.message} — check your internet connection`);
+  }
+}
+
+// ── Send to ntfy.sh ───────────────────────────────────────────────────────────
+
+async function sendNtfy(title, body, priority = 'default', tags = []) {
+  if (!channels.ntfy.on || !channels.ntfy.topic) return false;
+  try {
+    const r = await fetch(`https://ntfy.sh/${encodeURIComponent(channels.ntfy.topic)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain',
+        'Title':        title,
+        'Priority':     priority,
+        'Tags':         tags.join(','),
+      },
+      body,
+    });
+    return r.ok;
+  } catch(e) {
+    console.warn('ntfy send failed:', e);
+    return false;
+  }
+}
+
+async function testNtfy() {
+  setStatus('ntfy-status', 'info', 'Sending...');
+  const ok = await sendNtfy(
+    'HL Scanner — test',
+    'Notifications working! BTC LONG · Momentum 4/5 · Entry $68,150',
+    'default',
+    ['white_check_mark','chart_with_upwards_trend']
+  );
+  setStatus('ntfy-status', ok ? 'ok' : 'err', ok ? 'Notification sent! Check your phone.' : 'Failed — check your topic name and that you\'ve subscribed in the ntfy app');
+}
+
+// ── Fire alert for a signal ───────────────────────────────────────────────────
+
+async function fireAlert(s) {
+  // Check thresholds
+  if (s.score < thresholds.minScore) return;
+  if (s.dir === 'long'  && !thresholds.long)  return;
+  if (s.dir === 'short' && !thresholds.short) return;
+  if (s.dir === 'watch' && !thresholds.watch) return;
+
+  const dirEmoji = s.dir === 'long' ? '📈' : s.dir === 'short' ? '📉' : '👀';
+  const scorePips = '●'.repeat(s.score) + '○'.repeat(5-s.score);
+
+  // Telegram message
+  const tgText =
+    `${dirEmoji} <b>${s.asset}-PERP ${s.dir.toUpperCase()}</b>\n` +
+    `${stratLabel(s.strategy)} · ${scorePips}\n\n` +
+    `Entry  <b>$${fmtPrice(s.entry)}</b>\n` +
+    (s.stop   ? `Stop   <b>$${fmtPrice(s.stop)}</b>\n`   : '') +
+    (s.target ? `Target <b>$${fmtPrice(s.target)}</b>\n` : '') +
+    (s.rr     ? `R:R    <b>${s.rr.toFixed(1)}:1</b>\n`   : '') +
+    `\n<i>${s.reason}</i>`;
+
+  // ntfy message
+  const ntfyTitle = `${dirEmoji} ${s.asset} ${s.dir.toUpperCase()} — ${stratLabel(s.strategy)}`;
+  const ntfyBody  =
+    `Score ${s.score}/5 · Entry $${fmtPrice(s.entry)}` +
+    (s.stop ? ` · Stop $${fmtPrice(s.stop)}` : '') +
+    (s.rr   ? ` · R:R ${s.rr.toFixed(1)}:1`  : '');
+  const ntfyPriority = s.score >= 5 ? 'high' : s.score >= 4 ? 'default' : 'low';
+  const ntfyTags = s.dir === 'long' ? ['chart_with_upwards_trend'] : s.dir === 'short' ? ['chart_with_downwards_trend'] : ['eyes'];
+
+  // Fire both in parallel
+  await Promise.all([
+    sendTelegram(tgText),
+    sendNtfy(ntfyTitle, ntfyBody, ntfyPriority, ntfyTags),
+  ]);
+}
+
+function setStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `notif-status ${type}`;
+  el.textContent = msg;
+}
+
+// Initialise button state on load
+updateNotifBtn();
+
+// ═══════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') { closeModal(); closeNotifModal(); }
+  if (e.key===' ' && e.target.tagName!=='INPUT') { e.preventDefault(); toggleScan(); }
+  if (e.key==='r' && e.target.tagName!=='INPUT') runScan();
+});
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+
+renderWatchlist();
+renderStrategyFilters();
+renderSignalFilters();
+startScanLoop();
+</script>
+</body>
+</html>
